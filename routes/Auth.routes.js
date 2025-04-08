@@ -2,12 +2,13 @@ import dotenv from 'dotenv';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import {pool} from '../database/Auth.database.js';
-import {google} from 'googleapis';
+import { pool } from '../database/Auth.database.js';
+import { google } from 'googleapis';
 
 
 dotenv.config();
 const router = express.Router();
+
 
 router.post('/login', async (req, res) => {
     console.log('Login');
@@ -82,6 +83,20 @@ router.get('/logout', (req, res) => {
     }
 }
 );
+
+router.get('/profile-data', async (req, res) => {
+    const cookiesData = req.cookies;
+    if (!cookiesData.jwtToken){
+        res.status(500).json({status: 'fail'});
+    } else {
+        const data = jwt.verify(cookiesData.jwtToken, 'secret');
+        console.log(data);
+        if (!data){
+            res.status(500).json({status: 'fail'});
+        }
+        res.status(200).json({name: 'ugi', password: 'eelu123'});
+    }
+});
 
 
 // googleauth 

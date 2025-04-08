@@ -8,5 +8,5 @@ export const pool = new Pool({
   password: process.env.DB_PASSWORD,
   host: 'localhost',
   port: 5432, // default Postgres port
-  database: 'account_data'
+  database: 'website_data'
 });

@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import express from 'express';
 import authRoutes from './routes/Auth.routes.js';
+import personalAreaRoutes from './routes/PersonalArea.routes.js';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
@@ -25,6 +26,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/auth', authRoutes);
+app.use('/personal-area', personalAreaRoutes);
 
 app.listen(PORT, () => {
   console.log(PORT);
