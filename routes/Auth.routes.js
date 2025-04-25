@@ -27,12 +27,13 @@ router.post('/login', async (req, res) => {
                 res.status(200).json({status: 'Password is wrong'});
             } else {
                 const token = jwt.sign({email: validationData.rows[0].email, id: validationData.rows[0].id}, 'secret')
+                const userData = {username: validationData.rows[0].username, account_type: validationData.rows[0].account_type, profile_picture: validationData.rows[0].profile_picture};
                 res.cookie("jwtToken", token, {
                     httpOnly: true,
                     maxAge: expireCookies,
                     expire: Date.now() + expireCookies
                 });
-                res.status(200).json({status: 'ok'});
+                res.status(200).json({status: 'ok', data: userData});
             }
         }
     } catch (error) {
@@ -83,6 +84,27 @@ router.get('/logout', (req, res) => {
     }
 }
 );
+
+router.post('/change-username', async (req, res) => {
+    const {username} = req.body;
+    const cookiesData = req.cookies;
+    if (!cookiesData.jwtToken){
+        res.status(500).json({status: 'fail'});
+    } else {
+        const data = jwt.verify(cookiesData.jwtToken, 'secret');
+        console.log(data);
+        if (!data){
+            res.status(500).json({status: 'fail'});
+        }
+        pool.query('UPDATE user_data SET username = $1 WHERE id = $2', [username, data.id], (err, results) => {
+            if (err){
+                throw err;
+            };
+            console.log('Username updated');
+            res.status(200).json({status: 'ok'});
+        });
+    }
+});
 
 router.get('/profile-data', async (req, res) => {
     const cookiesData = req.cookies;
@@ -139,7 +161,6 @@ router.get('/google/callback', async (req, res) => {
             const expireCookies = 4 * 60 * 60 * 1000;
             try {
                 pool.query('SELECT email, id FROM user_data WHERE email = $1', [email], (err, results) => {
-                    console.log(results.rows);
                     if (results.rows.length !== 0){
                         const token = jwt.sign({email: email, id: results.rows[0].id}, 'secret');
                         res.cookie("jwtToken", token, {

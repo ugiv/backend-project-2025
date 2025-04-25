@@ -148,6 +148,7 @@ router.post('/add-visitor', (req, res) => {
     // }
     res.status(200).json({status: 'ok'});
 });
+
 router.post('/analytics', (req, res) => {
     const cookiesData = req.cookies;
     const {web_id} = req.body;
@@ -164,27 +165,20 @@ router.post('/analytics', (req, res) => {
                     throw err;
                 }
                 const monthly = results.rows;
-                // `
-                // SELECT 
-                //     DATE_PART('day', visit_time::timestamp) AS visit_day, 
-                //     COUNT(*) AS total_visitors 
-                //     FROM visitor_data 
-                //     WHERE web_id = $1 
-                // GROUP BY visit_day 
-                // ORDER BY MIN(visit_time)`, 
                 pool.query(
                     `
                     SELECT 
-                        TO_CHAR(visit_time, 'Month') AS month_name,
-                        EXTRACT(DAY FROM visit_time) AS day_date,
+                        DATE_PART('year', visit_time) AS Year,
+                        TO_CHAR(visit_time, 'Month') AS Month,
+                        EXTRACT(DAY FROM visit_time) AS day,
                         COUNT(*) AS total_daily
                     FROM 
                         visitor_data
                     WHERE web_id = $1
                     GROUP BY 
-                        month_name, day_date
+                        Year, Month, Day
                     ORDER BY 
-                        month_name, day_date
+                        Year, Month, Day
                     `, [web_id], (err, results) => {
                     if (err) {
                         throw err;
