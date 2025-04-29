@@ -2,8 +2,9 @@ import { pool } from '../database/PersonalArea.database.js';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 const router = express.Router();
-import multer from "multer";
-import { Storage } from "@google-cloud/storage";
+// import multer from "multer";
+// import { Storage } from "@google-cloud/storage";
+import { upload, uploadImageToGCS } from '../middleware/GoogleStorage.js';
 
 router.post('/template-editor/add-new-collection', (req, res) => {
     const cookiesData = req.cookies;
@@ -201,77 +202,71 @@ router.post('/analytics', (req, res) => {
 // upload image to google cloud storage
 
 
-const storage = new Storage({
-    keyFilename: 'project-key.json'
-});
-const bucket = storage.bucket('pagetos-image-storage');
-const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: {
-        fileSize: 5 * 1024 * 1024
-    }
-});
+// const storage = new Storage({
+//     keyFilename: 'project-key.json'
+// });
+// const bucket = storage.bucket('pagetos-image-storage');
+// const upload = multer({
+//     storage: multer.memoryStorage(),
+//     limits: {
+//         fileSize: 5 * 1024 * 1024
+//     }
+// });
 
-const uploadImage = (file) => {
-    return new Promise((resolve, reject) => {
-        if (!file){
-            reject('No image file');
-        }
-        const {originalname, buffer} = file;
-        const blob = bucket.file(originalname);
-        const blobStream = blob.createWriteStream({
-            resumable: false
-        });
-        blobStream.on('finish', () => {
-            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-            resolve(publicUrl);
-        }).on('error', (error) => {
-            reject(error);
-        }).end(buffer);
-    });
-}
+// const uploadImage = (file) => {
+//     return new Promise((resolve, reject) => {
+//         if (!file){
+//             reject('No image file');
+//         }
+//         const {originalname, buffer} = file;
+//         const blob = bucket.file(originalname);
+//         const blobStream = blob.createWriteStream({
+//             resumable: false
+//         });
+//         blobStream.on('finish', () => {
+//             const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+//             resolve(publicUrl);
+//         }).on('error', (error) => {
+//             reject(error);
+//         }).end(buffer);
+//     });
+// }
 
-const uploadNewImageToGCS = async (req, res, next) => {
-    const file = req.file;
-    const webData = req.body.templateData;
-    const {image} = JSON.parse(webData);
-    if (image){
-        console.log(image);
-        await storage.bucket('pagetos-image-storage').file(image).delete();
-        console.log('delete');
-    }
-    if (!file){
-        res.status(400).json({status: 'fail', message: 'No image file'});
-    }
-    let fileName;
-    // if (!image){
-    //     console.log('new image create');
-    fileName = Date.now() + file.originalname;
-    // } else {
-    //     console.log('edit image' + image);
-    //     fileName = image;
-    // }
-    const blob = bucket.file(fileName);
-    const blobStream = blob.createWriteStream({
-        metadata: {
-            contentType: file.mimetype
-        }
-    });
-    blobStream.on('error', (error) => {
-        console.log('fail');
-        res.status(500).json({status: 'fail', message: error});
-    });
-    blobStream.on('finish', () => {
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-        console.log(publicUrl);
-        req.imageUrl = publicUrl;
-        req.imageName = fileName;
-        next();
-    });
-    blobStream.end(file.buffer);
-}
+// const uploadNewImageToGCS = async (req, res, next) => {
+//     const file = req.file;
+//     const webData = req.body.templateData;
+//     const {image} = JSON.parse(webData);
+//     if (image){
+//         console.log(image);
+//         await storage.bucket('pagetos-image-storage').file(image).delete();
+//         console.log('delete');
+//     }
+//     if (!file){
+//         res.status(400).json({status: 'fail', message: 'No image file'});
+//     }
+//     let fileName;
+//     fileName = Date.now() + file.originalname;
+//     const blob = bucket.file(fileName);
+//     const blobStream = blob.createWriteStream({
+//         metadata: {
+//             contentType: file.mimetype
+//         }
+//     });
+//     blobStream.on('error', (error) => {
+//         console.log('fail');
+//         res.status(500).json({status: 'fail', message: error});
+//     });
+//     blobStream.on('finish', () => {
+//         const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+//         console.log(publicUrl);
+//         req.imageUrl = publicUrl;
+//         req.imageName = fileName;
+//         next();
+//     });
+//     blobStream.end(file.buffer);
+// }
 
-router.post('/upload-last-edit-image', upload.single('file'), uploadNewImageToGCS, async (req, res, next) => {
+router.post('/upload-last-edit-image', upload.single('file'), uploadImageToGCS, async (req, res, next) => {
     const linkImage = req.imageUrl;
     const imageName = req.imageName;
     const cookiesData = req.cookies;

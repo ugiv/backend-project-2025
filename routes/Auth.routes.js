@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { pool } from '../database/Auth.database.js';
 import { google } from 'googleapis';
-
+import { uploadProfilePictureToGCS, upload } from '../middleware/GoogleStorage.js';
 
 dotenv.config();
 const router = express.Router();
@@ -106,6 +106,19 @@ router.post('/change-username', async (req, res) => {
     }
 });
 
+router.get('/login-status', (req, res) => {
+    const cookiesData = req.cookies;
+    if (!cookiesData.jwtToken){
+        res.status(500).json({status: 'fail'});
+    } else {
+        const data = jwt.verify(cookiesData.jwtToken, 'secret');
+        if (!data){
+            res.status(500).json({status: 'fail'});
+        }
+        res.status(200).json({status: 'ok'});
+    }
+});
+
 router.get('/profile-data', async (req, res) => {
     const cookiesData = req.cookies;
     if (!cookiesData.jwtToken){
@@ -116,9 +129,36 @@ router.get('/profile-data', async (req, res) => {
         if (!data){
             res.status(500).json({status: 'fail'});
         }
-        res.status(200).json({name: 'ugi', password: 'eelu123'});
+        pool.query('SELECT profile_picture, username, email, account_type FROM user_data WHERE id = $1', [data.id], (err, results) => {
+            if (err){
+                throw err;
+            }
+            res.status(200).json({status: 'ok', data: results.rows[0]});
+        })
     }
 });
+
+router.post('/change-profile-picture',upload.single('file'), uploadProfilePictureToGCS, async (req, res) => {
+    const linkImage = req.imageUrl;
+    const imageName = req.imageName;
+    const cookiesData = req.cookies;
+    const profilePictureData = JSON.stringify({link: linkImage, imageName: imageName});
+    // const fileData = req.body;
+    if (!cookiesData.jwtToken){
+        res.status(500).json({status: 'fail'});
+    } else {
+        const data = jwt.verify(cookiesData.jwtToken, 'secret');
+        if (!data){
+            res.status(500).json({status: 'fail'});
+        }
+        pool.query('UPDATE user_data SET profile_picture = $1  WHERE id = $2', [profilePictureData, data.id], (err, results) => {
+            if (err){
+                throw err;
+            }
+            res.status(200).json({status: 'ok'});
+        })
+    }
+})
 
 
 // googleauth 
