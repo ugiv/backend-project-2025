@@ -17,13 +17,15 @@ export const upload = multer({
 export const uploadImageToGCS = async (req, res, next) => {
     const file = req.file;
     const webData = req.body.templateData;
+    console.log(file);
     if (webData){
         const {image} = JSON.parse(webData);
-        if (image !== undefined){
+        console.log(image);
+        if (image !== undefined && image !== false && image!== ''){
             // console.log(image);
             await storage.bucket('pagetos-image-storage').file(image).delete();
             // console.log('delete');
-        }
+        } 
     }
     if (!file){
         res.status(400).json({status: 'fail', message: 'No image file'});
