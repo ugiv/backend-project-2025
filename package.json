@@ -1,7 +1,7 @@
 {
   "name": "backend-project-2025",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.mjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
@@ -11,8 +11,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google-cloud/cloud-sql-connector": "^1.8.0",
     "@google-cloud/storage": "^7.16.0",
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

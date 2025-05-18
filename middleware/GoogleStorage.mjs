@@ -1,7 +1,7 @@
 import multer from "multer";
 import { Storage } from "@google-cloud/storage";
 import jwt from 'jsonwebtoken';
-import { pool } from "../database/Auth.database.js";
+import { pool } from "../database/Auth.database.mjs";
 
 const storage = new Storage({
     keyFilename: 'project-key.json'

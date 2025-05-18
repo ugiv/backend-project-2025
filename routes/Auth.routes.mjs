@@ -1,22 +1,19 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-import { pool } from '../database/Auth.database.js';
+import bcrypt from 'bcryptjs';
+import { pool } from '../database/Auth.database.mjs';
 import { google } from 'googleapis';
-import { uploadProfilePictureToGCS, upload } from '../middleware/GoogleStorage.js';
+import { uploadProfilePictureToGCS, upload } from '../middleware/GoogleStorage.mjs';
 
 dotenv.config();
 const router = express.Router();
 
-
 router.post('/login', async (req, res) => {
-    console.log('Login');
     const {email, password} = req.body;
-    console.log(email, password);
     const expireCookies = 4 * 60 * 60 * 1000;
     try {
-        const validationData = await pool.query('SELECT * FROM user_data WHERE email = $1', [email]);
+        const validationData = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if (validationData.rows.length === 0 || validationData.rows === false){
             res.status(400).json({status: 'Email not exist.'});
         } else {
@@ -39,8 +36,7 @@ router.post('/login', async (req, res) => {
     } catch (error) {
         res.status(500).send('Internal Server Error');
     }
-}
-);
+});
 router.post('/register', async (req, res) => {
     const {username, email, password} = req.body;
     const expireCookies = 50 * 1000;
@@ -49,12 +45,12 @@ router.post('/register', async (req, res) => {
     }
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        pool.query('SELECT email FROM user_data WHERE email = $1', [email], (err, results) => {
+        pool.query('SELECT email FROM users WHERE email = $1', [email], (err, results) => {
             if (results.rows.length !== 0){
                 console.log('fail');
                 res.status(200).json({status: 'Email aready exist'});
             } else {
-                pool.query('INSERT INTO user_data(username, email, password) VALUES($1, $2, $3)', [username, email, hashedPassword], (err, results) => {
+                pool.query('INSERT INTO users(username, email, password) VALUES($1, $2, $3)', [username, email, hashedPassword], (err, results) => {
                     if (err){
                         throw err;
                     };
@@ -69,7 +65,7 @@ router.post('/register', async (req, res) => {
             }
         });
     } catch (error) {
-        console.log(error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 }
 );
@@ -78,7 +74,6 @@ router.get('/logout', (req, res) => {
     if (cookiesData){
         res.clearCookie("jwtToken");
         res.status(200).json({status: 'ok'});
-
     } else {
         res.send(200).json({status: 'fail'})
     }
@@ -96,13 +91,17 @@ router.post('/change-username', async (req, res) => {
         if (!data){
             res.status(500).json({status: 'fail'});
         }
-        pool.query('UPDATE user_data SET username = $1 WHERE id = $2', [username, data.id], (err, results) => {
-            if (err){
-                throw err;
-            };
-            console.log('Username updated');
-            res.status(200).json({status: 'ok'});
-        });
+        try {
+            pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, data.id], (err, results) => {
+                if (err){
+                    throw err;
+                };
+                console.log('Username updated');
+                res.status(200).json({status: 'ok'});
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 });
 
@@ -129,16 +128,21 @@ router.get('/profile-data', async (req, res) => {
         if (!data){
             res.status(500).json({status: 'fail'});
         }
-        pool.query('SELECT profile_picture, username, email, account_type FROM user_data WHERE id = $1', [data.id], (err, results) => {
-            if (err){
-                throw err;
-            }
-            res.status(200).json({status: 'ok', data: results.rows[0]});
-        })
+        // change table name here
+        try {
+            pool.query('SELECT profile_picture, username, email, account_type FROM users WHERE id = $1', [data.id], (err, results) => {
+                if (err){
+                    throw err;
+                }
+                res.status(200).json({status: 'ok', data: results.rows[0]});
+            })
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 });
 
-router.post('/change-profile-picture',upload.single('file'), uploadProfilePictureToGCS, async (req, res) => {
+router.post('/change-profile-picture', upload.single('file'), uploadProfilePictureToGCS, async (req, res) => {
     const linkImage = req.imageUrl;
     const imageName = req.imageName;
     const cookiesData = req.cookies;
@@ -151,12 +155,17 @@ router.post('/change-profile-picture',upload.single('file'), uploadProfilePictur
         if (!data){
             res.status(500).json({status: 'fail'});
         }
-        pool.query('UPDATE user_data SET profile_picture = $1  WHERE id = $2', [profilePictureData, data.id], (err, results) => {
-            if (err){
-                throw err;
-            }
-            res.status(200).json({status: 'ok'});
-        })
+        // change table name here
+        try {
+            pool.query('UPDATE users SET profile_picture = $1  WHERE id = $2', [profilePictureData, data.id], (err, results) => {
+                if (err){
+                    throw err;
+                }
+                res.status(200).json({status: 'ok'});
+            })
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 })
 
@@ -200,7 +209,8 @@ router.get('/google/callback', async (req, res) => {
             const password = '__';
             const expireCookies = 4 * 60 * 60 * 1000;
             try {
-                pool.query('SELECT email, id FROM user_data WHERE email = $1', [email], (err, results) => {
+                // change table name here
+                pool.query('SELECT email, id FROM users WHERE email = $1', [email], (err, results) => {
                     if (results.rows.length !== 0){
                         const token = jwt.sign({email: email, id: results.rows[0].id}, 'secret');
                         res.cookie("jwtToken", token, {
@@ -210,7 +220,8 @@ router.get('/google/callback', async (req, res) => {
                         });
                         res.status(200).redirect('http://localhost:3000/dashboard');
                     } else {
-                        pool.query('INSERT INTO user_data(username, email, password) VALUES($1, $2, $3)', [given_name, email, password], (err, results) => {
+                        // change table name here
+                        pool.query('INSERT INTO users(username, email, password) VALUES($1, $2, $3)', [given_name, email, password], (err, results) => {
                             if (err){
                                 throw err;
                             };
@@ -231,25 +242,25 @@ router.get('/google/callback', async (req, res) => {
     });
 });
 
-// router.get('/forgot-password', (req, res) => {
-//   res.send('Forgot Password Page');
-// }
-// );
-// router.get('/reset-password', (req, res) => {
-//   res.send('Reset Password Page');
-// }
-// );
-// router.get('/verify-email', (req, res) => {
-//   res.send('Verify Email Page');
-// }
-// );
-// router.get('/verify-phone', (req, res) => {
-//   res.send('Verify Phone Page');
-// }
-// );
-// router.get('/change-password', (req, res) => {
-//   res.send('Change Password Page');
-// }
-// );
+router.get('/forgot-password', (req, res) => {
+  res.send('Forgot Password Page');
+}
+);
+router.get('/reset-password', (req, res) => {
+  res.send('Reset Password Page');
+}
+);
+router.get('/verify-email', (req, res) => {
+  res.send('Verify Email Page');
+}
+);
+router.get('/verify-phone', (req, res) => {
+  res.send('Verify Phone Page');
+}
+);
+router.get('/change-password', (req, res) => {
+  res.send('Change Password Page');
+}
+);
 
 export default router;

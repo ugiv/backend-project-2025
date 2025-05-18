@@ -1,10 +1,11 @@
-import { pool } from '../database/PersonalArea.database.js';
+// import { pool } from '../database/PersonalArea.database.js';
+import { pool } from '../database/Auth.database.mjs';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 const router = express.Router();
 // import multer from "multer";
 // import { Storage } from "@google-cloud/storage";
-import { upload, uploadImageToGCS } from '../middleware/GoogleStorage.js';
+import { upload, uploadImageToGCS } from '../middleware/GoogleStorage.mjs';
 
 router.post('/template-editor/add-new-collection', (req, res) => {
     const cookiesData = req.cookies;
@@ -25,7 +26,7 @@ router.post('/template-editor/add-new-collection', (req, res) => {
             })
             res.status(200).json({status: 'ok'})
         } catch (error) {
-            throw error;
+            res.status(500).json({ error: 'Internal server error' });
         }
     }
 });
@@ -44,7 +45,7 @@ router.post('/template-editor/save', async (req, res) => {
                 res.status(200).json({status: 'ok'})
             });
         } catch (error) {
-            throw error;
+            res.status(500).json({ error: 'Internal server error' });
         }
     }
 });
@@ -88,7 +89,7 @@ router.get('/edit-website/:web_id', async (req, res) => {
             res.json(results.rows[0]);
         });
     } catch (error) {
-
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -99,15 +100,14 @@ router.get('/collection', (req, res) => {
     } else {
         try {
             const data = jwt.verify(cookiesData.jwtToken, 'secret');
-            console.log(data);
             pool.query('SELECT web_id, image_link, image_name, visitor, name, link, template_id FROM collection_data INNER JOIN website_list ON collection_data.web_id = website_list.id AND website_list.user_id = $1', [data.id], (error, results) => {
                 if (error){
                     throw error;
                 };
                 res.status(200).json({status: 'ok', data: results.rows});
-            })
+            });
         } catch (error) {
-            throw error;
+            res.status(500).json({ error: 'Internal server error' });
         }
     }
 });
@@ -128,7 +128,7 @@ router.post('/change-link', (req, res) => {
                 res.status(200).json({status: 'ok', data: results.rows});
             })
         } catch (error) {
-            throw error;
+            res.status(500).json({ error: 'Internal server error' });
         }
     }
 });
@@ -150,53 +150,53 @@ router.post('/add-visitor', (req, res) => {
     res.status(200).json({status: 'ok'});
 });
 
-router.post('/analytics', (req, res) => {
-    const cookiesData = req.cookies;
-    const {web_id} = req.body;
-    console.log(web_id);
-    if (Object.values(cookiesData).length === 0){
-        res.status(400).json({status: 'fail'});
-    } else {
-        try {
-            // const data = jwt.verify(cookiesData.jwtToken, 'secret');
-            pool.query(
-                `SELECT TO_CHAR(visit_time, 'Month') AS month_name, COUNT(*) AS total_visitors FROM visitor_data WHERE web_id = $1 GROUP BY month_name ORDER BY MIN(visit_time)`, 
-                [web_id], (err, results) => {
-                if (err) {
-                    throw err;
-                }
-                const monthly = results.rows;
-                pool.query(
-                    `
-                    SELECT 
-                        DATE_PART('year', visit_time) AS Year,
-                        TO_CHAR(visit_time, 'Month') AS Month,
-                        EXTRACT(DAY FROM visit_time) AS day,
-                        COUNT(*) AS total_daily
-                    FROM 
-                        visitor_data
-                    WHERE web_id = $1
-                    GROUP BY 
-                        Year, Month, Day
-                    ORDER BY 
-                        Year, Month, Day
-                    `, [web_id], (err, results) => {
-                    if (err) {
-                        throw err;
-                    }
-                    if (monthly && results.rows){
-                        console.log(results.rows);
-                        res.status(200).json({status: 'ok', data: {daily: results.rows, monthly: monthly}});
-                    } else {
-                        res.status(400).json({status: 'fail'});
-                    }
-                });
-            });
-        } catch (error) {
-            throw error;
-        }
-    }
-});
+// router.post('/analytics', (req, res) => {
+//     const cookiesData = req.cookies;
+//     const {web_id} = req.body;
+//     console.log(web_id);
+//     if (Object.values(cookiesData).length === 0){
+//         res.status(400).json({status: 'fail'});
+//     } else {
+//         try {
+//             // const data = jwt.verify(cookiesData.jwtToken, 'secret');
+//             pool.query(
+//                 `SELECT TO_CHAR(visit_time, 'Month') AS month_name, COUNT(*) AS total_visitors FROM visitor_data WHERE web_id = $1 GROUP BY month_name ORDER BY MIN(visit_time)`, 
+//                 [web_id], (err, results) => {
+//                 if (err) {
+//                     throw err;
+//                 }
+//                 const monthly = results.rows;
+//                 pool.query(
+//                     `
+//                     SELECT 
+//                         DATE_PART('year', visit_time) AS Year,
+//                         TO_CHAR(visit_time, 'Month') AS Month,
+//                         EXTRACT(DAY FROM visit_time) AS day,
+//                         COUNT(*) AS total_daily
+//                     FROM 
+//                         visitor_data
+//                     WHERE web_id = $1
+//                     GROUP BY 
+//                         Year, Month, Day
+//                     ORDER BY 
+//                         Year, Month, Day
+//                     `, [web_id], (err, results) => {
+//                     if (err) {
+//                         throw err;
+//                     }
+//                     if (monthly && results.rows){
+//                         console.log(results.rows);
+//                         res.status(200).json({status: 'ok', data: {daily: results.rows, monthly: monthly}});
+//                     } else {
+//                         res.status(400).json({status: 'fail'});
+//                     }
+//                 });
+//             });
+//         } catch (error) {
+//             res.status(500).json({ error: 'Internal server error' });
+//         }
+//     }
+// });
 
 
 // upload image to google cloud storage
@@ -289,7 +289,7 @@ router.post('/upload-last-edit-image', upload.single('file'), uploadImageToGCS, 
                 });
                 res.status(200).json({status: 'ok'})
             } catch (error) {
-                throw error;
+                res.status(500).json({ error: 'Internal server error' });
             }
         } else {
             try {
@@ -305,7 +305,7 @@ router.post('/upload-last-edit-image', upload.single('file'), uploadImageToGCS, 
                 })
                 res.status(200).json({status: 'ok'})
             } catch (error) {
-                throw error;
+                res.status(500).json({ error: 'Internal server error' });
             }
         }
     } else {
