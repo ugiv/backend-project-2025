@@ -1,6 +1,5 @@
 import express from 'express';
 // import { personalAreaPool } from './database/PersonalArea.database.mjs';
-
 import dotenv from 'dotenv';
 dotenv.config();
 import authRoutes from './routes/Auth.routes.mjs';
@@ -9,13 +8,21 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
 
-
-
 const app = express();
-// const PORT = process.env.PORT || 5001;
+
+let origin = '';
+if (process.env.NODE_ENV === 'development') {
+  origin = 'http://localhost:3000';
+}
+if (process.env.NODE_ENV === 'production') {
+  origin = 'https://infork.netlify.app';
+}
+console.log(process.env.NODE_ENV);
+
 const corsOptions = {
-  origin: 'http://localhost:3000',
-  methods: ['GET', 'POST', 'OPTIONS'],
+  origin: origin,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 };
 app.use(cors(corsOptions));

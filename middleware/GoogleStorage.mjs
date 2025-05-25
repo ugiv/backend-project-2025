@@ -52,23 +52,19 @@ export const uploadImageToGCS = async (req, res, next) => {
     blobStream.end(file.buffer);
 }
 
-export const uploadProfilePictureToGCS = async (req, res, next) => {
+export const uploadPublicImageToGCS = async (req, res, next) => {
     const file = req.file;
     let imageName = false;
     const cookiesData = req.cookies;
     const data = jwt.verify(cookiesData.jwtToken, 'secret');
     try {
-        pool.query("SELECT profile_picture FROM user_data WHERE id = $1", [data.id], (err, results) => {
+        pool.query("SELECT profile_picture FROM users WHERE id = $1", [data.id], (err, results) => {
             if (err){
                 throw err;
             }
-            // console.log(results.rows[0]);
             imageName = results.rows[0].profile_picture;
             if (imageName && imageName !== null){
-
-                    // console.log(image);
-                    storage.bucket('pagetos-image-storage').file(imageName.imageName).delete();
-                    // console.log('delete');
+                storage.bucket('pagetos-image-storage').file(imageName.imageName).delete();
             }
             if (!file){
                 res.status(400).json({status: 'fail', message: 'No image file'});
@@ -94,6 +90,38 @@ export const uploadProfilePictureToGCS = async (req, res, next) => {
             });
             blobStream.end(file.buffer);
         })
+    } catch (error) {
+        throw error;
+    }
+}
+
+export const uploadCollectionImageToGCS = async (req, res, next) => {
+    const file = req.file;
+    const cookiesData = req.cookies;
+    const data = jwt.verify(cookiesData.jwtToken, 'secret');
+    try {
+        if (file === undefined || file === null || file === ''){
+            res.status(400).json({status: 'fail', message: 'No image file'});
+        }
+        let fileName;
+        fileName = 'collection-image-' + data.id + '-'+ Date.now();
+        const blob = bucket.file(fileName);
+        const blobStream = blob.createWriteStream({
+            metadata: {
+                contentType: file.mimetype
+            }
+        });
+        blobStream.on('error', (error) => {
+            console.log('fail');
+            res.status(500).json({status: 'fail', message: error});
+        });
+        blobStream.on('finish', () => {
+            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+            req.imageUrl = publicUrl;
+            req.imageName = fileName;
+            next();
+        });
+        blobStream.end(file.buffer);
     } catch (error) {
         throw error;
     }

@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { pool } from '../database/Auth.database.mjs';
 import { google } from 'googleapis';
-import { uploadProfilePictureToGCS, upload } from '../middleware/GoogleStorage.mjs';
+import { uploadPublicImageToGCS, upload } from '../middleware/GoogleStorage.mjs';
 
 dotenv.config();
 const router = express.Router();
@@ -25,9 +25,12 @@ router.post('/login', async (req, res) => {
             } else {
                 const token = jwt.sign({email: validationData.rows[0].email, id: validationData.rows[0].id}, 'secret')
                 const userData = {username: validationData.rows[0].username, account_type: validationData.rows[0].account_type, profile_picture: validationData.rows[0].profile_picture};
+                console.log(token);
                 res.cookie("jwtToken", token, {
                     httpOnly: true,
                     maxAge: expireCookies,
+                    secure: true,
+                    sameSite: "None",
                     expire: Date.now() + expireCookies
                 });
                 res.status(200).json({status: 'ok', data: userData});
@@ -40,6 +43,7 @@ router.post('/login', async (req, res) => {
 router.post('/register', async (req, res) => {
     const {username, email, password} = req.body;
     const expireCookies = 50 * 1000;
+    const account_type = 'free';
     if (!password || !email || !password){
         res.send('fail signup')
     }
@@ -50,7 +54,7 @@ router.post('/register', async (req, res) => {
                 console.log('fail');
                 res.status(200).json({status: 'Email aready exist'});
             } else {
-                pool.query('INSERT INTO users(username, email, password) VALUES($1, $2, $3)', [username, email, hashedPassword], (err, results) => {
+                pool.query('INSERT INTO users(username, email, password, account_type) VALUES($1, $2, $3, $4)', [username, email, hashedPassword, account_type], (err, results) => {
                     if (err){
                         throw err;
                     };
@@ -58,6 +62,8 @@ router.post('/register', async (req, res) => {
                     res.cookie("jwtToken", token, {
                         httpOnly: true,
                         maxAge: expireCookies,
+                        secure: true,
+                        sameSite: "None",
                         expire: Date.now() - expireCookies
                     });
                     res.status(200).json({status: 'ok'});
@@ -87,7 +93,6 @@ router.post('/change-username', async (req, res) => {
         res.status(500).json({status: 'fail'});
     } else {
         const data = jwt.verify(cookiesData.jwtToken, 'secret');
-        console.log(data);
         if (!data){
             res.status(500).json({status: 'fail'});
         }
@@ -142,12 +147,11 @@ router.get('/profile-data', async (req, res) => {
     }
 });
 
-router.post('/change-profile-picture', upload.single('file'), uploadProfilePictureToGCS, async (req, res) => {
+router.post('/change-profile-picture', upload.single('file'), uploadPublicImageToGCS, async (req, res) => {
     const linkImage = req.imageUrl;
     const imageName = req.imageName;
     const cookiesData = req.cookies;
     const profilePictureData = JSON.stringify({link: linkImage, imageName: imageName});
-    // const fileData = req.body;
     if (!cookiesData.jwtToken){
         res.status(500).json({status: 'fail'});
     } else {
@@ -174,7 +178,7 @@ router.post('/change-profile-picture', upload.single('file'), uploadProfilePictu
 const oauth2Client = new google.auth.OAuth2(
     process.env.CLIENT_ID,
     process.env.CLIENT_SECRET,
-    "http://localhost:5001/auth/google/callback"
+    "https://dummy-backend-500141028909.asia-southeast2.run.app/auth/google/callback"
 );
 
 const scopes = [
@@ -208,6 +212,7 @@ router.get('/google/callback', async (req, res) => {
             const {email, given_name} = response.data;
             const password = '__';
             const expireCookies = 4 * 60 * 60 * 1000;
+            const account_type = 'free';
             try {
                 // change table name here
                 pool.query('SELECT email, id FROM users WHERE email = $1', [email], (err, results) => {
@@ -216,12 +221,18 @@ router.get('/google/callback', async (req, res) => {
                         res.cookie("jwtToken", token, {
                             httpOnly: true,
                             maxAge: expireCookies,
+                            secure: true,
+                            sameSite: "None",
                             expire: Date.now() - expireCookies
                         });
-                        res.status(200).redirect('http://localhost:3000/dashboard');
+                        if (process.env.NODE_ENV === 'development'){
+                            res.status(200).redirect('http://localhost:3000/dashboard');
+                        } else {
+                            res.status(200).redirect('https://infork.netlify.app/dashboard');
+                        }
                     } else {
                         // change table name here
-                        pool.query('INSERT INTO users(username, email, password) VALUES($1, $2, $3)', [given_name, email, password], (err, results) => {
+                        pool.query('INSERT INTO users(username, email, password, account_type) VALUES($1, $2, $3, $4)', [given_name, email, password, account_type], (err, results) => {
                             if (err){
                                 throw err;
                             };
@@ -229,9 +240,15 @@ router.get('/google/callback', async (req, res) => {
                             res.cookie("jwtToken", token, {
                                 httpOnly: true,
                                 maxAge: expireCookies,
+                                secure: true,
+                                sameSite: "None",
                                 expire: Date.now() - expireCookies
                             });
-                            res.status(200).json({status: 'ok'});
+                            if (process.env.NODE_ENV === 'development'){
+                                res.status(200).redirect('http://localhost:3000/dashboard');
+                            } else {
+                                res.status(200).redirect('https://infork.netlify.app/dashboard');
+                            }
                         });
                     }
                 });

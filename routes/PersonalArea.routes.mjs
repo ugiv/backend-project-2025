@@ -1,11 +1,11 @@
 // import { pool } from '../database/PersonalArea.database.js';
-import { pool } from '../database/Auth.database.mjs';
+import { pool } from '../database/PersonalArea.database.mjs';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 const router = express.Router();
 // import multer from "multer";
 // import { Storage } from "@google-cloud/storage";
-import { upload, uploadImageToGCS } from '../middleware/GoogleStorage.mjs';
+import { upload, uploadImageToGCS, uploadCollectionImageToGCS } from '../middleware/GoogleStorage.mjs';
 
 router.post('/template-editor/add-new-collection', (req, res) => {
     const cookiesData = req.cookies;
@@ -38,7 +38,7 @@ router.post('/template-editor/save', async (req, res) => {
         const {name, id, components_list, style, content} = req.body;
         // const current_time = '2025-03-11';
         try {
-            pool.query('UPDATE website_list SET name = $1, components_list = $2, style = $3, content = $4 WHERE id = $5 ', [name, components_list, style, content, id], (error, results) => {
+            pool.query('UPDATE website_list SET name = $1, component_list = $2, style = $3, content = $4 WHERE id = $5 ', [name, components_list, style, content, id], (error, results) => {
                 if (error){
                     throw error;
                 }
@@ -54,7 +54,7 @@ router.get('/website-list/:link', async (req, res) => {
     const link = req.params.link;
     const ip_address = req.ip;
     try {
-        pool.query('SELECT id, template_id, name, link, components_list, content, style FROM website_list WHERE link = $1', [link], (err, results) => {
+        pool.query('SELECT id, template_id, name, link, component_list, content, style FROM website_list WHERE link = $1', [link], (err, results) => {
             if (err){
                 throw err;
             }
@@ -78,7 +78,7 @@ router.get('/edit-website/:web_id', async (req, res) => {
     try {
         pool.query(
             `SELECT website_list.id, website_list.template_id, website_list.name, website_list.link, 
-            website_list.components_list, website_list.content, website_list.style, collection_data.image_link, collection_data.image_name 
+            website_list.component_list, website_list.content, website_list.style, collection_data.image_link, collection_data.image_name 
             FROM website_list
             INNER JOIN collection_data ON website_list.id = collection_data.web_id 
             WHERE website_list.id = $1`, 
@@ -93,7 +93,8 @@ router.get('/edit-website/:web_id', async (req, res) => {
     }
 });
 
-router.get('/collection', (req, res) => {
+// add asnyc function
+router.get('/collection', async (req, res) => {
     const cookiesData = req.cookies;
     if (Object.values(cookiesData).length === 0){
         res.status(400).json({status: 'fail'})
@@ -112,7 +113,27 @@ router.get('/collection', (req, res) => {
     }
 });
 
-router.post('/change-link', (req, res) => {
+router.get('/collection-table-test', async (req, res) => {
+    const cookiesData = req.cookies;
+    if (Object.values(cookiesData).length === 0){
+        res.status(400).json({status: 'fail'})
+    } else {
+        try {
+            const data = jwt.verify(cookiesData.jwtToken, 'secret');
+            pool.query('SELECT * FROM collection_data WHERE user_id = $1', [data.id], (error, results) => {
+                if (error){
+                    throw error;
+                };
+                res.status(200).json({status: 'ok', data: results.rows});
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+})
+
+
+router.post('/change-link', async (req, res) => {
     const cookiesData = req.cookies;
     const {link, web_id} = req.body;
     if (Object.values(cookiesData).length === 0){
@@ -150,121 +171,90 @@ router.post('/add-visitor', (req, res) => {
     res.status(200).json({status: 'ok'});
 });
 
-// router.post('/analytics', (req, res) => {
-//     const cookiesData = req.cookies;
-//     const {web_id} = req.body;
-//     console.log(web_id);
-//     if (Object.values(cookiesData).length === 0){
-//         res.status(400).json({status: 'fail'});
-//     } else {
-//         try {
-//             // const data = jwt.verify(cookiesData.jwtToken, 'secret');
-//             pool.query(
-//                 `SELECT TO_CHAR(visit_time, 'Month') AS month_name, COUNT(*) AS total_visitors FROM visitor_data WHERE web_id = $1 GROUP BY month_name ORDER BY MIN(visit_time)`, 
-//                 [web_id], (err, results) => {
-//                 if (err) {
-//                     throw err;
-//                 }
-//                 const monthly = results.rows;
-//                 pool.query(
-//                     `
-//                     SELECT 
-//                         DATE_PART('year', visit_time) AS Year,
-//                         TO_CHAR(visit_time, 'Month') AS Month,
-//                         EXTRACT(DAY FROM visit_time) AS day,
-//                         COUNT(*) AS total_daily
-//                     FROM 
-//                         visitor_data
-//                     WHERE web_id = $1
-//                     GROUP BY 
-//                         Year, Month, Day
-//                     ORDER BY 
-//                         Year, Month, Day
-//                     `, [web_id], (err, results) => {
-//                     if (err) {
-//                         throw err;
-//                     }
-//                     if (monthly && results.rows){
-//                         console.log(results.rows);
-//                         res.status(200).json({status: 'ok', data: {daily: results.rows, monthly: monthly}});
-//                     } else {
-//                         res.status(400).json({status: 'fail'});
-//                     }
-//                 });
-//             });
-//         } catch (error) {
-//             res.status(500).json({ error: 'Internal server error' });
-//         }
-//     }
-// });
-
+router.post('/analytics', (req, res) => {
+    const cookiesData = req.cookies;
+    const {web_id} = req.body;
+    console.log(web_id);
+    if (Object.values(cookiesData).length === 0){
+        res.status(400).json({status: 'fail'});
+    } else {
+        try {
+            // const data = jwt.verify(cookiesData.jwtToken, 'secret');
+            pool.query(
+                `SELECT TO_CHAR(visit_time, 'Month') AS month_name, COUNT(*) AS total_visitors FROM visitor_data WHERE web_id = $1 GROUP BY month_name ORDER BY MIN(visit_time)`, 
+                [web_id], (err, results) => {
+                if (err) {
+                    throw err;
+                }
+                const monthly = results.rows;
+                pool.query(
+                    `
+                    SELECT 
+                        DATE_PART('year', visit_time) AS Year,
+                        TO_CHAR(visit_time, 'Month') AS Month,
+                        EXTRACT(DAY FROM visit_time) AS day,
+                        COUNT(*) AS total_daily
+                    FROM 
+                        visitor_data
+                    WHERE web_id = $1
+                    GROUP BY 
+                        Year, Month, Day
+                    ORDER BY 
+                        Year, Month, Day
+                    `, [web_id], (err, results) => {
+                    if (err) {
+                        throw err;
+                    }
+                    if (monthly && results.rows){
+                        console.log(results.rows);
+                        res.status(200).json({status: 'ok', data: {daily: results.rows, monthly: monthly}});
+                    } else {
+                        res.status(400).json({status: 'fail'});
+                    }
+                });
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
+router.get('/collection-image', async (req, res) => {
+    const cookiesData = req.cookies;
+    if (Object.values(cookiesData).length === 0){
+        res.status(400).json({status: 'fail'})
+    } else {
+        try {
+            const data = jwt.verify(cookiesData.jwtToken, 'secret');
+            pool.query('SELECT image_link, image_name FROM user_image_collection WHERE user_id = $1', [data.id], (error, results) => {
+                if (error){
+                    throw error;
+                };
+                res.status(200).json({status: 'ok', data: results.rows});
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+})
 
 // upload image to google cloud storage
-
-
-// const storage = new Storage({
-//     keyFilename: 'project-key.json'
-// });
-// const bucket = storage.bucket('pagetos-image-storage');
-// const upload = multer({
-//     storage: multer.memoryStorage(),
-//     limits: {
-//         fileSize: 5 * 1024 * 1024
-//     }
-// });
-
-// const uploadImage = (file) => {
-//     return new Promise((resolve, reject) => {
-//         if (!file){
-//             reject('No image file');
-//         }
-//         const {originalname, buffer} = file;
-//         const blob = bucket.file(originalname);
-//         const blobStream = blob.createWriteStream({
-//             resumable: false
-//         });
-//         blobStream.on('finish', () => {
-//             const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-//             resolve(publicUrl);
-//         }).on('error', (error) => {
-//             reject(error);
-//         }).end(buffer);
-//     });
-// }
-
-// const uploadNewImageToGCS = async (req, res, next) => {
-//     const file = req.file;
-//     const webData = req.body.templateData;
-//     const {image} = JSON.parse(webData);
-//     if (image){
-//         console.log(image);
-//         await storage.bucket('pagetos-image-storage').file(image).delete();
-//         console.log('delete');
-//     }
-//     if (!file){
-//         res.status(400).json({status: 'fail', message: 'No image file'});
-//     }
-//     let fileName;
-//     fileName = Date.now() + file.originalname;
-//     const blob = bucket.file(fileName);
-//     const blobStream = blob.createWriteStream({
-//         metadata: {
-//             contentType: file.mimetype
-//         }
-//     });
-//     blobStream.on('error', (error) => {
-//         console.log('fail');
-//         res.status(500).json({status: 'fail', message: error});
-//     });
-//     blobStream.on('finish', () => {
-//         const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-//         console.log(publicUrl);
-//         req.imageUrl = publicUrl;
-//         req.imageName = fileName;
-//         next();
-//     });
-//     blobStream.end(file.buffer);
-// }
+router.post('/upload-image-collection', upload.single('file'), uploadCollectionImageToGCS, async (req, res, next) => {
+    console.log(req.file);
+    const linkImage = req.imageUrl;
+    const imageName = req.imageName;
+    const cookiesData = req.cookies;
+    const jwtData = jwt.verify(cookiesData.jwtToken, 'secret');
+    try {
+        if (!linkImage || !imageName || !jwtData.id) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        await pool.query('INSERT INTO user_image_collection(user_id, image_link, image_name) VALUES($1, $2, $3)', [jwtData.id, linkImage, imageName]);
+        res.status(200).json({status: 'ok'});
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });     
+    }
+    next();
+});
 
 router.post('/upload-last-edit-image', upload.single('file'), uploadImageToGCS, async (req, res, next) => {
     const linkImage = req.imageUrl;
@@ -272,44 +262,29 @@ router.post('/upload-last-edit-image', upload.single('file'), uploadImageToGCS, 
     const cookiesData = req.cookies;
     const data = req.body.templateData;
     const {id, template_id, name, link, components_list, style, content} = JSON.parse(data);
-    if (cookiesData){
-        const jwtData = jwt.verify(cookiesData.jwtToken, 'secret');
-        const current_time = '2025-03-11';
-        if (link === undefined){
-            try {
-                pool.query('UPDATE website_list SET name = $1, components_list = $2, style = $3, content = $4 WHERE id = $5 ', [name, components_list, style, content, id], (error, results) => {
-                    if (error){
-                        throw error;
-                    }
-                });
-                pool.query('UPDATE collection_data SET image_link = $1, image_name = $2 WHERE web_id = $3 ', [linkImage, imageName, id], (error, results) => {
-                    if (error){
-                        throw error;
-                    }
-                });
-                res.status(200).json({status: 'ok'})
-            } catch (error) {
-                res.status(500).json({ error: 'Internal server error' });
-            }
-        } else {
-            try {
-                pool.query('INSERT INTO website_list(id, user_id, template_id, name, link, components_list, style, content, created_at) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', [id, jwtData.id, template_id, name, link, components_list, style, content, current_time], (error, results) => {
-                    if (error){
-                        throw error;
-                    };
-                });
-                pool.query('INSERT INTO collection_data(web_id, user_id, image_link, image_name) VALUES($1, $2, $3, $4)', [id, jwtData.id, linkImage, imageName], (error, results) => {
-                    if (error){
-                        throw error;
-                    };
-                })
-                res.status(200).json({status: 'ok'})
-            } catch (error) {
-                res.status(500).json({ error: 'Internal server error' });
-            }
+    const components_list_json = JSON.stringify(components_list);
+    const style_json = JSON.stringify(style);
+    const content_json = JSON.stringify(content);
+    const jwtData = jwt.verify(cookiesData.jwtToken, 'secret');
+    const current_time = '2025-05-19';
+    try {
+        if (!id || !name || !template_id || !components_list || !style || !content){
+            return res.status(400).json({ error: 'Missing required fields' , data: {id, template_id, name, link, components_list, style, content, jwtData}});
         }
-    } else {
-        res.status(400).json({status: 'fail'});
+        if (link !== undefined && cookiesData){
+            await pool.query('INSERT INTO website_list(id, user_id, name, link, component_list, style, content, created_at, template_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', [id, jwtData.id, name, link, components_list_json, style_json, content_json, current_time, template_id]);
+            await pool.query('INSERT INTO collection_data(web_id, user_id, image_link, visitor, image_name) VALUES($1, $2, $3, $4, $5)', [id, jwtData.id, linkImage, null, imageName]);
+            return res.status(200).json({status: 'ok'});
+        } else if (cookiesData) {
+            await pool.query('UPDATE website_list SET name = $1, component_list = $2, style = $3, content = $4 WHERE id = $5 ', [name, components_list_json, style_json, content_json, id]);
+            await pool.query('UPDATE collection_data SET image_link = $1, image_name = $2 WHERE web_id = $3 ', [linkImage, imageName, id]);
+            return res.status(200).json({status: 'ok'});
+        } else {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).json({ error: 'Internal server error', data: {linkImage, imageName, id, template_id, name, link, components_list, style, content}});
     }
     next();
 });
