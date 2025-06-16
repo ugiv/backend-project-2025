@@ -73,8 +73,9 @@ router.post('/register', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }
-}
-);
+});
+
+
 router.get('/logout', (req, res) => {
     const cookiesData = req.cookies;
     if (cookiesData){
@@ -113,13 +114,14 @@ router.post('/change-username', async (req, res) => {
 router.get('/login-status', (req, res) => {
     const cookiesData = req.cookies;
     if (!cookiesData.jwtToken){
-        res.status(500).json({status: 'fail'});
+        // res.status(500).json({status: 'fail'});
+        res.status(200).json({loggedIn: false});
     } else {
         const data = jwt.verify(cookiesData.jwtToken, 'secret');
         if (!data){
-            res.status(500).json({status: 'fail'});
+            res.status(200).json({loggedIn: false});
         }
-        res.status(200).json({status: 'ok'});
+        res.status(200).json({loggedIn: true});
     }
 });
 
@@ -175,10 +177,17 @@ router.post('/change-profile-picture', upload.single('file'), uploadPublicImageT
 
 
 // googleauth 
+let urlCallBack = "https://dummy-backend-500141028909.asia-southeast2.run.app/auth/google/callback";
+
+if (process.env.NODE_ENV === 'development'){
+    urlCallBack = "http://localhost:5001/auth/google/callback";
+}
+console.log(urlCallBack);
+
 const oauth2Client = new google.auth.OAuth2(
     process.env.CLIENT_ID,
     process.env.CLIENT_SECRET,
-    "https://dummy-backend-500141028909.asia-southeast2.run.app/auth/google/callback"
+    urlCallBack
 );
 
 const scopes = [
